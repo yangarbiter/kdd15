@@ -65,10 +65,11 @@ def main():
     y = np.array([ans[k] for k in ans.keys()])
     _temp, bins = np.histogram(diff_time[y==1], bins=30)
     _temp2, bins = np.histogram(diff_time[y==0], bins=bins)
-    plt.plot(_temp)
-    plt.plot(_temp2)
+    plt.plot(_temp/float(np.sum(_temp)))
+    plt.plot(_temp2/float(np.sum(_temp2)))
     plt.show(block=False)
     _ = raw_input('type something')
+    plt.close()
 
 
     """
@@ -80,11 +81,25 @@ def main():
     m = min(last_time)
     _temp, bins = np.histogram(last_time[y==1]-m, bins=30)
     _temp2, bins = np.histogram(last_time[y==0]-m, bins=bins)
-    plt.plot(_temp)
-    plt.plot(_temp2)
+    plt.plot(_temp/float(np.sum(_temp)))
+    plt.plot(_temp2/float(np.sum(_temp2)))
     plt.show(block=False)
     _ = raw_input('type something')
+    plt.close()
 
+    """
+    plot number of event distribution.
+    """
+    num_logs = np.array(
+            [len(data[k]['logs']) for k in ans.keys()]
+            )
+    _temp, bins = np.histogram(num_logs[y==1], bins=30)
+    _temp2, bins = np.histogram(num_logs[y==0], bins=bins)
+    plt.plot(_temp/float(np.sum(_temp)))
+    plt.plot(_temp2/float(np.sum(_temp2)))
+    plt.show(block=False)
+    _ = raw_input('type something')
+    plt.close()
 
     """
     save data to pickle file
