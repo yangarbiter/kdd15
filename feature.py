@@ -50,6 +50,10 @@ def build_feature(data):
 def main():
     with open(proc.DATA_PATH_PREFIX+'data.pkl', 'r') as f:
         data = cPickle.load(f)
+    for i in data.keys():
+        if data[i]['logs'] == []:
+            print i, 'empty_log'
+    del data[139669]
     X = np.array(build_feature(data))
 
 

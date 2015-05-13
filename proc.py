@@ -64,7 +64,7 @@ def loadans():
 def outputans(ans):
     with open('ans', 'w') as f:
         for ent in ans:
-            f.write(ent[0] + ',' + ent[1] + '\n')
+            f.write(str(ent[0]) + ',' + str(ent[1]) + '\n')
 
 def main():
     allcourses = set([])
@@ -75,6 +75,7 @@ def main():
     """
     with open(DATA_PATH_PREFIX+'data.pkl', 'r') as f:
         data = cPickle.load(f)
+    del data[139669] #data without log
     ans = loadans()
 
     #print set(data.keys()) - set(loadans().keys())
