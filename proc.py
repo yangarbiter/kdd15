@@ -8,10 +8,20 @@ DATA_PATH_PREFIX = "../data/"
 EVENTS = ['problem', 'video', 'access', 'wiki', 'discussion', 'nagivate', 'page_close']
 SOURCE = ['server', 'browser']
 
-def loaddat():
+def loaddat(test=False):
     data = {}
+    if test == True:
+        enrole_file = 'enrollment_test.csv'
+    else:
+        enrole_file = 'enrollment_train.csv'
 
-    with open(DATA_PATH_PREFIX + 'enrollment_train.csv', 'rb') as csvfile:
+    if test == True:
+        log_file = 'log_test.csv'
+    else:
+        log_file = 'log_train.csv'
+
+
+    with open(DATA_PATH_PREFIX + enrole_file, 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
         for row in reader:
             if row[0] == 'enrollment_id': continue
@@ -23,7 +33,7 @@ def loaddat():
             }
 
 
-    with open(DATA_PATH_PREFIX + 'log_train.csv', 'rb') as csvfile:
+    with open(DATA_PATH_PREFIX + log_file, 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
         for row in reader:
             if row[0] == 'enrollment_id': continue
@@ -38,6 +48,10 @@ def loaddat():
 
     return data
 
+def loadobj():
+    with open(DATA_PATH_PREFIX + 'object.csv', 'rb') as csvfile:
+        pass
+
 def loadans():
     ans = {}
     with open(DATA_PATH_PREFIX + 'truth_train.csv', 'rb') as csvfile:
@@ -47,13 +61,22 @@ def loadans():
             ans[enrole_id] = int(row[1])
     return ans
 
+def outputans(ans):
+    with open('ans', 'w') as f:
+        for ent in ans:
+            f.write(ent[0] + ',' + ent[1] + '\n')
+
 def main():
+    allcourses = set([])
+    with open(DATA_PATH_PREFIX+'testdata.pkl', 'r') as f:
+        data = cPickle.load(f)
     """
     load data from pickle file
     """
     with open(DATA_PATH_PREFIX+'data.pkl', 'r') as f:
         data = cPickle.load(f)
     ans = loadans()
+
     #print set(data.keys()) - set(loadans().keys())
 
     """
