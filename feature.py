@@ -27,6 +27,8 @@ def logs2features(logs):
     for log in logs:
         ret[FET_NUM + log[2]] += 1
 
+    return ret
+
 def course_one_hot(data):
     allcourses = set([])
     for i in data.keys():
@@ -35,16 +37,18 @@ def course_one_hot(data):
 
     ret = []
     for i in data.keys():
-        _ = [0 for i in range(len(allcourses))]
+        _ = np.zeros((len(allcourses)))
         _[allcourses.index(data[i]['course_id'])] = 1
         ret.append(_)
 
-    return ret
+    return np.array(ret)
 
 def build_feature(data):
-    X = Parallel(n_jobs=12)(delayed(logs2features)(data[i]['logs']) for i in data.keys())
+    X = Parallel(n_jobs=20, verbose=5)(delayed(logs2features)(data[i]['logs']) for i in data.keys())
 
-    X = np.hstack((X, course_one_hot))
+    c_one_hot = course_one_hot(data)
+    print np.shape(X), np.shape(c_one_hot)
+    X = np.hstack((X, c_one_hot))
     return X
 
 def main():
