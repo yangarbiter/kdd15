@@ -61,10 +61,10 @@ def loadans():
             ans[enrole_id] = int(row[1])
     return ans
 
-def outputans(ans):
+def outputans(idxs, ans):
     with open('ans', 'w') as f:
-        for ent in ans:
-            f.write(str(ent[0]) + ',' + str(ent[1]) + '\n')
+        for i, enrole_id in enumerate(idxs):
+            f.write(str(enrole_id) + ',' + str(ans[i]) + '\n')
 
 def main():
     allcourses = set([])
