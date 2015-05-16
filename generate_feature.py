@@ -22,6 +22,7 @@ def get_course_info(all_data, video_info = False, problem_info = False):
     - start_date: start date
     - end_date: end date
     - n_enroll: number of enrollment
+    - n_source_event_pair(9)
     - d_activity: daily number of view
     - n_video: number of released video
     - video_info: total number of view,
@@ -39,6 +40,7 @@ def get_course_info(all_data, video_info = False, problem_info = False):
     course_data.drop_duplicates(inplace = True)
     course_by_date = course_data.groupby('course_id')['date'].value_counts()
     course_by_user = course_data.groupby('course_id')['username'].value_counts()
+    course_event = all_data.groupby(['course_id', 'source','event'])['time'].count()
 
     # video information
     course_video = all_data[(all_data['event'] == 'video')][['course_id', 'username', 'date', 'object']]
@@ -56,8 +58,26 @@ def get_course_info(all_data, video_info = False, problem_info = False):
         course_info[c]['start_date'] = min(course_by_date[c].index)
         course_info[c]['end_date'] = max(course_by_date[c].index)
         course_info[c]['n_enroll'] = len(course_by_user[c])
-        course_info[c]['d_activity'] = {k:v for k, v in
-                            zip(course_by_date[c].index, course_by_date[c])}
+        course_info[c]['n_server_navigate'] = course_event[c]['server']\
+                                                .get('nagivate', 0)
+        course_info[c]['n_server_access'] = course_event[c]['server']\
+                                                .get('access', 0)
+        course_info[c]['n_server_problem'] = course_event[c]['server']\
+                                                .get('problem', 0)
+        course_info[c]['n_server_discussion'] = course_event[c]['server']\
+                                                .get('discussion', 0)
+        course_info[c]['n_server_wiki'] = course_event[c]['server']\
+                                                .get('wiki', 0)
+        course_info[c]['n_browser_access'] = course_event[c]['browser']\
+                                                .get('access', 0)
+        course_info[c]['n_browser_problem'] = course_event[c]['browser']\
+                                                .get('problem', 0)
+        course_info[c]['n_browser_pageclose'] = course_event[c]['browser']\
+                                                .get('page_close', 0)
+        course_info[c]['n_browser_video'] = course_event[c]['browser']\
+                                                .get('video', 0)
+        # course_info[c]['d_activity'] = {k:v for k, v in
+                            # zip(course_by_date[c].index, course_by_date[c])}
         course_info[c]['n_video'] = len(course_by_video[c])
         course_info[c]['n_problem'] = len(course_by_pro[c])
         if(video_info):
@@ -77,6 +97,57 @@ def get_course_info(all_data, video_info = False, problem_info = False):
                            zip(course_by_pro_date[c][p].index, course_by_pro_date[c][p])}
             course_info[c]['pro_info'] = video
     return course_info
+
+def get_daily_activity(log_data, course_info):
+    """
+    return daily activity information for each enrollment
+    - n_records
+    - n_source_event_pair(9)
+    - n_video_object
+    - n_problem_object
+    """
+    daily = pd.DataFrame()
+    log_data['c_start'] = [course_info[c]['start_date']
+                                for c in log_data['course_id']]
+    log_data['days'] = log_data['date'] - log_data['c_start']
+    daily['total'] = log_data.groupby('enrollment_id')['time'].count()
+    for i in range(30):
+        d = pd.Timedelta(str(i) + ' days')
+        log_day = log_data[log_data['days'] == d]
+        d_name = 'n_' + str(i) + '_'
+        daily[d_name + 'records'] = log_day.groupby('enrollment_id')['time'].count()
+        log_server = log_day[log_day['source'] == 'server']
+        daily[d_name + 's_navigate'] = log_server[log_server['event'] == 'nagivate'] \
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 's_access'] = log_server[log_server['event'] == 'access']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 's_problem'] = log_server[log_server['event'] == 'problem']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 's_discussion'] = log_server[log_server['event'] == 'discussion']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 's_wiki'] = log_server[log_server['event'] == 'wiki']\
+                                        .groupby('enrollment_id')['time'].count()
+
+        log_browser = log_day[log_day['source'] == 'browser']
+        daily[d_name + 'b_access'] = log_browser[log_browser['event'] == 'access']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 'b_problem'] = log_browser[log_browser['event'] == 'problem']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 'b_pageclose'] = log_browser[log_browser['event'] == 'page_close']\
+                                        .groupby('enrollment_id')['time'].count()
+        daily[d_name + 'b_video'] = log_browser[log_browser['event'] == 'video']\
+                                        .groupby('enrollment_id')['time'].count()
+        log_day_video = log_day[log_day['event'] == 'video']\
+                                [['enrollment_id', 'object']]
+        log_day_video.drop_duplicates(inplace = True)
+        daily[d_name + 'video_object'] = log_day_video.groupby('enrollment_id').count()
+        log_day_pro = log_day[log_day['event'] == 'problem']\
+                                [['enrollment_id', 'object']]
+        log_day_pro.drop_duplicates(inplace = True)
+        daily[d_name + 'pro_object'] = log_day_pro.groupby('enrollment_id').count()
+    daily.fillna(0, inplace = True)
+    daily.drop('total', axis = 1, inplace = True)
+    return daily
 
 def get_total_activity(log_data):
     """
@@ -156,6 +227,11 @@ if __name__ == "__main__":
     enrollment = read_enrollment(enrollment_file)
     all_data = train_data.append(test_data)
     course_info = get_course_info(all_data)
+
+    #summary feature
     train_X = generate_feature(train_data, course_info, enrollment)
     train_X = train_X.as_matrix()
 
+    #daily feature
+    train_X = get_daily_activity(train_data, course_info)
+    train_X = train_X.as_matrix()
