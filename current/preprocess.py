@@ -24,9 +24,12 @@ def read_object_data(object_file):
 def preprocess_object_data(object_data):
     return object_data
 
-def read_log_data(log_file, object_file):
+def read_log_data(enrollment, log_file, object_file):
+    enrollment.index = enrollment['enrollment_id']
     log_data = pd.io.parsers.read_csv(log_file)
     log_data.drop_duplicates(inplace = True)
+    log_data = log_data.join(enrollment[['username', 'course_id']],
+                                        on = 'enrollment_id')
     log_data['time'] = pd.to_datetime(log_data['time'])
     log_data['date'] = [t.date() for t in log_data['time']]
     log_data['hour'] = [t.time() for t in log_data['time']]
