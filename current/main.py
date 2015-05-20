@@ -29,16 +29,17 @@ user_info = get_user_info(all_data)
 # generate feature for our current best result
 train_X = generate_feature(train_data, course_info,
                                     user_info, enroll_train)
-train_X = train_X.as_matrix()
 test_X = generate_feature(test_data, course_info,
                                     user_info, enroll_test)
-test_X = test_X.as_matrix()
 
 # genereate daily feature
 train_daily = get_daily_activity(train_data, course_info)
 train_daily = train_daily.as_matrix()
 test_daily = get_daily_activity(test_data, course_info)
 test_daily = test_daily.as_matrix()
+
+# if you want np.array
+train_daily = train_daily.as_matrix()
 
 # run model
 label_data = pd.io.parsers.read_csv(truth_train_file, header = None)
