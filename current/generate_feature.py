@@ -436,5 +436,6 @@ def generate_feature(log_data, course_info, user_info,
                                         / log_feature['u_t_max']
     log_feature['t_mean_rate'] = log_feature['s_t_mean'] \
                                         / log_feature['u_t_mean']
+    log_feature.replace([np.inf, -np.inf], np.nan, inplace = True)
     log_feature.fillna(0, inplace = True)
     return log_feature
