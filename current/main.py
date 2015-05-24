@@ -19,23 +19,33 @@ enroll_test = read_enrollment(enrollment_test_file)
 train_data = read_log_data(enroll_train, train_file, object_file)
 test_data = read_log_data(enroll_test, test_file, object_file)
 
-# get course information
 all_data = train_data.append(test_data)
+all_enroll = enroll_train.append(enroll_test)
+
+# get course information
 course_info = get_course_info(all_data)
 
+# get session information
+session_info, session = get_session_data(all_data, all_enroll)
+
 # get user information
-user_info = get_user_info(all_data)
+user_info = get_user_info(all_data, session)
+
+#  get leak feature
+leak_info = get_leak_feature(all_data, course_info)
 
 # generate feature for our current best result
-train_X = generate_feature(train_data, course_info,
-                                    user_info, enroll_train)
-test_X = generate_feature(test_data, course_info,
-                                    user_info, enroll_test)
+train_X = generate_feature(train_data, course_info, user_info,
+                leak_info, session_info, enroll_train)
+train_X = train_X.as_matrix()
+test_X = generate_feature(test_data, course_info, user_info,
+                leak_info, session_info, enroll_test)
+test_X = test_X.as_matrix()
 
 # genereate daily feature
 train_daily = get_daily_activity(train_data, course_info)
-test_daily = get_daily_activity(test_data, course_info)
 train_daily = train_daily.as_matrix()
+test_daily = get_daily_activity(test_data, course_info)
 test_daily = test_daily.as_matrix()
 
 # run model

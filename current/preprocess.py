@@ -25,7 +25,6 @@ def preprocess_object_data(object_data):
     return object_data
 
 def read_log_data(enrollment, log_file, object_file):
-    enrollment.index = enrollment['enrollment_id']
     log_data = pd.io.parsers.read_csv(log_file)
     log_data.drop_duplicates(inplace = True)
     log_data = log_data.join(enrollment[['username', 'course_id']],
@@ -40,8 +39,8 @@ def read_log_data(enrollment, log_file, object_file):
     return log_data
 
 def read_enrollment(enroll_file):
-    enrollment = pd.io.parsers.read_csv(enroll_file)
-    enrollment = enrollment[enrollment['enrollment_id'] != 139669]
+    enrollment = pd.io.parsers.read_csv(enroll_file, index_col = 0)
+    # enrollment = enrollment[enrollment['enrollment_id'] != 139669]
     return enrollment
 
 def normalize(feature, enrollment):
@@ -70,3 +69,13 @@ def smooth(feature, by = 3):
 def to_one(feature):
     f = lambda x : int(x > 0)
     return feature.applymap(f)
+
+def get_session(x, interval = 30):
+    x = np.array(x)
+    session = pd.DataFrame()
+    time_interval = (x[1:] - x[:-1])
+    valid = (time_interval < interval * 60 * 1000000000).astype(int)
+    session['group'] = (time_interval > interval * 60 * 1000000000)\
+                                .astype(int).cumsum()
+    session['time'] = time_interval * valid
+    return session.groupby('group')['time'].sum()

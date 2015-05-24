@@ -118,7 +118,7 @@ def get_course_info(all_data, video_info = False, problem_info = False):
             course_info[c]['pro_info'] = video
     return course_info
 
-def get_user_info(all_data):
+def get_user_info(all_data, session):
     """
     Return a pandas DataFrame contains information about each user
     - n_records: number of log
@@ -126,19 +126,90 @@ def get_user_info(all_data):
     - online_day: total number of online day
     """
     user_info = pd.DataFrame()
-    user_info['n_records'] = all_data.groupby('username')['time'].count()
-
+    user_info['u_n_records'] = all_data.groupby('username')['time'].count()
     user_enroll = all_data[['username', 'enrollment_id']]
     user_enroll.drop_duplicates(inplace = True)
-    user_info['n_enroll'] = user_enroll.groupby('username').count()
+    user_info['u_n_enroll'] = user_enroll.groupby('username').count()
 
     user_date = all_data[['username', 'date']]
     user_date.drop_duplicates(inplace = True)
-    user_info['online_day'] = user_date.groupby('username').count()
-    # user_info['first_day'] = user_date.groupby('username')['date'].min()
-    # user_info['last_day'] = user_date.groupby('username')['date'].max()
+    user_info['u_online_day'] = user_date.groupby('username').count()
+    user_info['u_first_day'] = user_date.groupby('username')['date'].min()
+    user_info['u_last_day'] = user_date.groupby('username')['date'].max()
+    min_day = min(user_info['u_first_day'])
+    user_info['u_first_day'] = [d.days for d in user_info['u_first_day'] - min_day]
+    user_info['u_last_day'] = [d.days for d in user_info['u_last_day'] - min_day]
+    user_info['u_duration'] = user_info['u_last_day'] - user_info['u_first_day']
+
+    user_info['u_n_sessions'] = session.groupby('username')['time'].count()
+    user_info['u_t_max'] = session.groupby('username')['time'].max()
+    session_select = session[session['time'] != 0]
+    user_info['u_t_mean'] = session_select.groupby('username')['time'].mean()
+    session_small = session[session['time'] < 10 * 60]
+    user_info['u_n_small_session'] = session_small.groupby('username')\
+                                        ['group'].count()
+    session_mid = session[(session['time'] > 10 * 60) & (session['time'] < 30 * 60)]
+    user_info['u_n_mid_session'] = session_mid.groupby('username')\
+                                        ['group'].count()
+    session_large = session[session['time'] > 30 * 60]
+    user_info['u_n_large_session'] = session_large.groupby('username')\
+                                        ['group'].count()
+
     user_info.fillna(0, inplace = True)
     return user_info
+
+def get_session_data(all_data, all_enroll):
+    session_info = pd.DataFrame()
+    session = all_data.groupby('enrollment_id')['time']\
+                        .apply(get_session).reset_index()
+    session['time'] = [t.total_seconds() for t in session['time']]
+    session_info['s_n_session'] = session.groupby('enrollment_id')['group'].count()
+    session_info['s_t_max'] = session.groupby('enrollment_id')['time'].max()
+
+    session_select = session[session['time'] != 0]
+    session_info['s_t_mean'] = session_select.groupby('enrollment_id')\
+                                    ['time'].mean()
+
+    session_small = session[session['time'] < 10 * 60]
+    session_info['s_n_small_session'] = session_small.groupby('enrollment_id')\
+                                        ['group'].count()
+
+    session_mid = session[(session['time'] > 10 * 60) & (session['time'] < 30 * 60)]
+    session_info['s_n_mid_session'] = session_mid.groupby('enrollment_id')\
+                                        ['group'].count()
+
+    session_large = session[session['time'] > 30 * 60]
+    session_info['s_n_large_session'] = session_large.groupby('enrollment_id')\
+                                        ['group'].count()
+
+    # session_info['t_large_mean'] = session_small.groupby('enrollment_id')\
+                                        # ['time'].mean()
+    session = session.join(all_enroll, on = 'enrollment_id')
+    session_info.fillna(0, inplace = True)
+    return session_info, session
+
+def get_leak_feature(all_data, course_info):
+    leak = pd.DataFrame()
+    for c in course_info:
+        print c
+        c_record = all_data[all_data['course_id'] == c]\
+                            [['enrollment_id', 'username']]
+        c_record.drop_duplicates(inplace = True)
+        c_record.index = c_record['username']
+        c_end = pd.to_datetime(course_info[c]['end_date'] + pd.Timedelta('1 days'))
+        c_10_end = c_end + pd.Timedelta('10 days')
+        c_10_log = all_data[(all_data['time'] > c_end)\
+                            & (all_data['time'] < c_10_end)]
+        c_record['after_n_records'] = c_10_log.groupby('username')['time'].count()
+        c_10_log = c_10_log[['username', 'date']]
+        c_10_log.drop_duplicates(inplace = True)
+
+        c_record['after_n_days'] = c_10_log.groupby('username')['date'].count()
+        c_record.index = c_record['enrollment_id']
+        c_record.drop(['username', 'enrollment_id'], axis = 1, inplace = True)
+        leak = leak.append(c_record)
+    leak.fillna(0, inplace = True)
+    return leak
 
 def get_daily_activity(log_data, course_info):
     """
@@ -275,7 +346,8 @@ def get_total_activity(log_data):
     data.fillna(0, inplace = True)
     return data
 
-def generate_feature(log_data, course_info, user_info, enrollment):
+def generate_feature(log_data, course_info, user_info,
+                            leak_info, session_info, enrollment):
     """
     Return a pandas DataFrame contains three kinds of features:
     - log_feature: activity of each enrollment from log file
@@ -283,14 +355,15 @@ def generate_feature(log_data, course_info, user_info, enrollment):
     - user_info
     """
     log_feature = get_total_activity(log_data)
-    enrollment.index = enrollment['enrollment_id']
+    log_feature = pd.concat([enrollment, log_feature], axis=1)
     enrollment['course_end'] = [pd.to_datetime(course_info[c]['end_date'] + pd.Timedelta('1 days'))
                                     for c in enrollment['course_id']]
     log_feature['first_day'] = [int(d.total_seconds()/60/60/24) for d in
                             (enrollment['course_end'] - log_feature['first_day'])]
     log_feature['last_day'] = [int(d.total_seconds()/60/60/24) for d in
                             (enrollment['course_end'] - log_feature['last_day'])]
-
+    log_feature['duration'] = log_feature['first_day'] - log_feature['last_day']
+    log_feature['online_rate'] = log_feature['online_day'] / log_feature['duration']
     # truth.index = truth[0]
     # enrollment['drop'] = truth[1]
     # dropout = enrollment.groupby('course_id')['drop'].mean()
@@ -329,7 +402,8 @@ def generate_feature(log_data, course_info, user_info, enrollment):
                                         # for c in enrollment['course_id']]
     # log_feature['course_p_per_chapter'] = [course_info[c]['p_per_chapter']
                                         # for c in enrollment['course_id']]
-
+    log_feature['release_rate'] = log_feature['course_video_release']\
+                                        / enrollment['course_n_video']
     log_feature['click_video_rate'] = log_feature['n_video_object'] \
                                         / enrollment['course_n_video']
     log_feature['click_problem_rate'] = log_feature['n_problem_object'] \
@@ -341,12 +415,26 @@ def generate_feature(log_data, course_info, user_info, enrollment):
     # log_feature['finish_rate'] = log_feature['finish_video'] \
                                     # / log_feature['online_day']
     # log_feature.drop(['n_problem_object', 'n_video_object', 'n_sequential_object', 'n_chapter_object'], axis = 1, inplace = True)
-
-    user_enroll = log_data[['enrollment_id', 'username', 'course_id']]
-    user_enroll.drop_duplicates(inplace = True)
-    user_enroll = user_enroll.join(user_info, on = 'username')
-    user_enroll.index = user_enroll['enrollment_id']
-    log_feature['u_n_records'] = user_enroll['n_records']
-    log_feature['u_n_enroll'] = user_enroll['n_enroll']
-    log_feature['u_online_day'] = user_enroll['online_day']
+    log_feature = log_feature.join(user_info, on = 'username')
+    log_feature = log_feature.join(session_info)
+    log_feature = log_feature.join(leak_info)
+    log_feature.drop(['username', 'course_id'], axis = 1, inplace = True)
+    log_feature.fillna(0, inplace = True)
+    log_feature['n_records_rate'] = log_feature['n_records'] \
+                                        / log_feature['u_n_records']
+    log_feature['duration_rate'] = log_feature['duration'] \
+                                        / log_feature['u_duration']
+    log_feature['small_session_rate'] = log_feature['s_n_small_session'] \
+                                        / log_feature['u_n_small_session']
+    log_feature['mid_session_rate'] = log_feature['s_n_mid_session'] \
+                                        / log_feature['u_n_mid_session']
+    log_feature['large_session_rate'] = log_feature['s_n_large_session'] \
+                                        / log_feature['u_n_large_session']
+    log_feature['n_session_rate'] = log_feature['s_n_session'] \
+                                        / log_feature['u_n_sessions']
+    log_feature['t_max_rate'] = log_feature['s_t_max'] \
+                                        / log_feature['u_t_max']
+    log_feature['t_mean_rate'] = log_feature['s_t_mean'] \
+                                        / log_feature['u_t_mean']
+    log_feature.fillna(0, inplace = True)
     return log_feature
