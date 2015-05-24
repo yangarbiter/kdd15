@@ -1,4 +1,3 @@
-
 import numpy as np
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score
@@ -9,7 +8,7 @@ from pandas.io.parsers import read_csv
 def evaluate(X_train, y_train, X_test, y_test, n_round):
     dtrain = xgb.DMatrix(X_train, label = y_train)
     dval = xgb.DMatrix(X_test, label = y_test)
-    param = {'bst:max_depth': 6,
+    param = {'bst:max_depth':6,
              'bst:eta': 0.05,
              'lambda': 0.01,
              'gamma': 0,
@@ -31,7 +30,7 @@ def evaluate(X_train, y_train, X_test, y_test, n_round):
     # clf.fit(X_train, y_train)
     # rf_score = roc_auc_score(y_test, clf.predict_proba(X_test)[:, 1])
     rf_score = 0
-    return xgb_score, rf_score
+    return xgb_score, rf_score, bst
 
 def model(features, label, val_train, val_test, n_round):
     """
@@ -43,6 +42,7 @@ def model(features, label, val_train, val_test, n_round):
     """
     xgb_score = []
     rf_score = []
+    features.fillna(0, inplace = True)
     X = features.as_matrix()
     y = np.array(label[1])
     skf = StratifiedKFold(y, n_folds=5, shuffle=True)
@@ -59,7 +59,7 @@ def model(features, label, val_train, val_test, n_round):
     y = np.array(label[label[0].isin(val_train['enrollment_id'])][1])
     X_test = features.ix[val_test['enrollment_id']]
     y_test = np.array(label[label[0].isin(val_test['enrollment_id'])][1])
-    xgb_auc, rf_auc = evaluate(X_train.as_matrix(), y,
+    xgb_auc, rf_auc, bst = evaluate(X_train.as_matrix(), y,
                             X_test.as_matrix(), y_test, n_round)
     print "==================================="
     print '5_fold: %f (+/- %f), min: %f, max: %f' \
@@ -69,5 +69,5 @@ def model(features, label, val_train, val_test, n_round):
     print 'xgboost + valid1: %f' % xgb_auc
     # print 'randomforest + valid1: %f' % rf_auc
     # print 'gbm + valid1: %f' % gbm_auc
-
+    return bst
 
