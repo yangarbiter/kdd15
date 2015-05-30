@@ -136,8 +136,6 @@ def get_user_info(all_data, session):
     user_info['u_online_day'] = user_date.groupby('username').count()
     user_info['u_first_day'] = user_date.groupby('username')['date'].min()
     user_info['u_last_day'] = user_date.groupby('username')['date'].max()
-    min_day = min(user_info['u_first_day'])
-    user_info['u_first_day'] = [d.days for d in user_info['u_first_day'] - min_day]
     user_info['u_last_day'] = [d.days for d in user_info['u_last_day'] - min_day]
     user_info['u_duration'] = user_info['u_last_day'] - user_info['u_first_day']
 
@@ -271,6 +269,32 @@ def get_daily_activity(log_data, course_info):
     daily.fillna(0, inplace = True)
     daily.drop('total', axis = 1, inplace = True)
     return daily
+
+def get_activity_exact_date(log_data):
+    daily_id = log_data.groupby(['enrollment_id', 'date'])['time']\
+                                .count().reset_index()
+    daily_user = log_data.groupby(['username', 'date'])['time']\
+                                .count().reset_index()
+    daily_id = daily_id.pivot(index='enrollment_id', columns='date', values='time')
+    daily_user = daily_user.pivot(index='username', columns='date', values='time')
+    daily_id.fillna(0, inplace = True)
+    daily_user.fillna(0, inplace = True)
+    return daily_id, daily_user
+
+def get_daily_auc(daily):
+    daily_auc = pd.DataFrame()
+    column = [c[4:] for c in daily.columns if c.startswith('n_0')]
+    fpr = [i / 30.0 for i in range(1,31,1)]
+    for c in column:
+        print c
+        col = [c_name for c_name in daily.columns if c_name.endswith(c)]
+        assert len(col) == 30
+        data = daily[col]
+        auc = data.apply(get_auc, axis=1, args=([fpr]))
+        c += '_auc'
+        daily_auc[c] = auc
+    daily_auc.fillna(0, inplace = True)
+    return daily_auc
 
 def get_total_activity(log_data):
     """

@@ -48,6 +48,9 @@ train_daily = train_daily.as_matrix()
 test_daily = get_daily_activity(test_data, course_info)
 test_daily = test_daily.as_matrix()
 
+# genereate daily feature with exact date
+daily_id, daily_user = get_activity_exact_date(train_data)
+
 # run model
 label_data = pd.io.parsers.read_csv(truth_train_file, header = None)
 val_train_data = pd.io.parsers.read_csv(val_train)
