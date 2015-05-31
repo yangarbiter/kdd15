@@ -136,6 +136,8 @@ def get_user_info(all_data, session):
     user_info['u_online_day'] = user_date.groupby('username').count()
     user_info['u_first_day'] = user_date.groupby('username')['date'].min()
     user_info['u_last_day'] = user_date.groupby('username')['date'].max()
+    min_day = min(user_info['u_first_day'])
+    user_info['u_first_day'] = [d.days for d in user_info['u_first_day'] - min_day]
     user_info['u_last_day'] = [d.days for d in user_info['u_last_day'] - min_day]
     user_info['u_duration'] = user_info['u_last_day'] - user_info['u_first_day']
 
