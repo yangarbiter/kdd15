@@ -18,6 +18,7 @@ PRED_PATH = '/tmp2/b01902066/KDD/kdd15/blending/allpreds/620/'
 def perf_SVM_train_eval(X, y, valX, valy, C):
     train_file = 'blend' + str(C) + '.svmlight'
     model_file = 'blending' + str(C) + '.model'
+    preds_file = 'blending_preds' + str(C) + '.pred'
     dump_svmlight_file(X, y, train_file, zero_based=False)
     result = subprocess.check_output(
             SVM_PERF_PATH + 'svm_perf_learn ' +\
@@ -31,10 +32,16 @@ def perf_SVM_train_eval(X, y, valX, valy, C):
     dump_svmlight_file(valX, valy, val_file, zero_based=False)
     result = subprocess.check_output(
             SVM_PERF_PATH + 'svm_perf_classify ' +\
-            val_file + ' ' + model_file,
+            val_file + ' ' + model_file + ' ' + preds_file,
             shell=True
         )
-    return float(re.findall('ROCArea[\s:0-9\.]+', result)[0][11:])/100.0
+
+    preds = []
+    with open(preds_file, 'r') as f:
+        preds = [float(line) for line in f.readlines()]
+
+    return roc_auc_score(valy, preds)
+    #return float(re.findall('ROCArea[\s:0-9\.]+', result)[0][11:])/100.0
 
 
 class Blender():
@@ -42,12 +49,12 @@ class Blender():
         pass
 
     def grid_search(self, X, y, valX, valy):
-        candidate_c = [10**i for i in range(-5, 5)]
+        candidate_c = [10**i for i in range(-1, 5)]
         res = Parallel(n_jobs=10, backend="threading")(
                     delayed(perf_SVM_train_eval)(X, y, valX, valy, c) \
                         for c in candidate_c)
         print "grid search result: ", res
-        return candidate_c[res.index(max(res))]
+        return max(res), candidate_c[res.index(max(res))]
 
     def train(self, X, y, C=1.0, gamma=1.0):
         dump_svmlight_file(X, y, 'blend.svmlight', zero_based=False)
@@ -89,9 +96,7 @@ def read_preds(path, filelist=[], verbose=True):
         del filelist[int(sys.argv[1])]
 
     for filename in filelist:
-        if 'team1' in filename and 'RF' in filename: continue
-        if 'team1' in filename and 'LR' in filename: continue
-        if 'team1' in filename and 'GBM' in filename: continue
+        if 'rfentro' in filename: continue
         if '_blend.csv' not in filename: continue
 
         pred = []
@@ -202,16 +207,18 @@ def main():
     #exit()
 
     clf = Blender()
-    C = clf.grid_search(X, y, valX, valy)
-    print C
+    score, C = clf.grid_search(X, y, valX, valy)
+    print 'C:', C
+    print 'auc val:', score
     clf.ori_score(X, y)
     print "------------------"
     clf.ori_score(valX, valy)
     print "------------------"
-    clf.train(X, y, C)
+    #clf.train(X, y, C)
+    clf.train(np.vstack((X, valX)), np.hstack((y, valy)), C)
     #clf.predict(X, y)
-    print 'auc in: ', clf.predict(X, y)
-    print 'auc val:', clf.predict(valX, valy)
+    #print 'auc in: ', clf.predict(X, y)
+    #print 'auc val:', clf.predict(valX, valy)
 
     #print 'auc in: ', clf.auc_score(X, y)
     #print 'auc val:', clf.auc_score(valX, valy)
