@@ -12,7 +12,8 @@ from sklearn.svm import LinearSVC, SVC
 from sklearn.grid_search import GridSearchCV
 from joblib import Parallel, delayed
 
-SVM_PERF_PATH = '../current/svm_perf/'
+SVM_PERF_PATH = '/tmp2/b01902066/KDD/kdd15/current/svm_perf/'
+PRED_PATH = '/tmp2/b01902066/KDD/kdd15/blending/allpreds/620/'
 
 def perf_SVM_train_eval(X, y, valX, valy, C):
     train_file = 'blend' + str(C) + '.svmlight'
@@ -42,50 +43,13 @@ class Blender():
 
     def grid_search(self, X, y, valX, valy):
         candidate_c = [10**i for i in range(-5, 5)]
-        res = Parallel(n_jobs=10)(
+        res = Parallel(n_jobs=10, backend="threading")(
                     delayed(perf_SVM_train_eval)(X, y, valX, valy, c) \
                         for c in candidate_c)
         print "grid search result: ", res
         return candidate_c[res.index(max(res))]
 
     def train(self, X, y, C=1.0, gamma=1.0):
-        #parameters = {
-        #            'kernel': ['rbf'],
-        #            'C': [0.01, 0.1, 1, 10, 100],
-        #            'gamma': [0.01, 0.1, 1, 10, 100]
-        #        }
-        #self.clf = GridSearchCV(
-        #            SVC(kernel='rbf'),
-        #            parameters,
-        #            cv=5,
-        #            n_jobs=-1
-        #        )
-        #self.clf = SVC(
-        #            kernel='rbf',
-        #            C=C,
-        #            gamma=gamma,
-        #            probability=True,
-        #            cache_size=160000,
-        #        )
-
-        #self.clf = SVC(
-        #        kernel='linear',
-        #        C=10.0,
-        #        class_weight="auto",
-        #        probability=True,
-        #    )
-        #self.clf = RandomForestClassifier(
-        #        n_estimators=500,
-        #        class_weight="auto",
-        #        n_jobs=-1,
-        #    )
-        #self.clf = LogisticRegression(
-        #        C=0.1,
-        #    )
-        #self.clf.fit(X, y)
-        #print self.clf.grid_scores_
-        #print self.clf.coef_
-
         dump_svmlight_file(X, y, 'blend.svmlight', zero_based=False)
         result = subprocess.check_output(
                 SVM_PERF_PATH + 'svm_perf_learn -c ' + str(C) + ' -l 10 -w 3 blend.svmlight blending.model',
@@ -114,19 +78,20 @@ class Blender():
     def auc_score(self, X, y):
         return roc_auc_score(y, self.clf.predict_proba(X)[:, 1])
 
-def read_preds(path, exclude=-1):
+def read_preds(path, filelist=[], verbose=True):
     preds = []
     valpreds = []
     testpreds = []
-    for i, filename in enumerate(os.listdir(path)):
-        #if 'ada' in filename[:4]: continue
-        #if 'RF' in filename: continue
-        if 'team5' in filename: continue
-        if i == exclude:
-            print 'exclude: ' + filename
-            continue
-        #if 'DNN' in filename: continue
-        #if 'LogR' in filename: continue
+    if filelist == []:
+        filelist = [filename for filename in sorted(os.listdir(path)) if '_blend.csv' in filename]
+    if len(sys.argv) >= 2:
+        print 'deleted ', filelist[int(sys.argv[1])]
+        del filelist[int(sys.argv[1])]
+
+    for filename in filelist:
+        if 'team1' in filename and 'RF' in filename: continue
+        if 'team1' in filename and 'LR' in filename: continue
+        if 'team1' in filename and 'GBM' in filename: continue
         if '_blend.csv' not in filename: continue
 
         pred = []
@@ -137,7 +102,8 @@ def read_preds(path, exclude=-1):
         #print(len(pred))
         pred = calibrate(pred)
         preds.append(pred)
-        print filename
+        if verbose:
+            print filename
         assert np.shape(pred) == (20000,)
 
         val_filename = filename[:-9] + 'val.csv'
@@ -213,7 +179,7 @@ def outputans(ans, id_file_path, path):
 
 def main():
     eid, y, valeid, valy = read_truth()
-    X, valX, testX = read_preds('./allpreds/0618/')
+    X, valX, testX = read_preds(PRED_PATH)
 
     #print X, testX
     print np.shape(X), np.shape(valX), np.shape(testX)
@@ -242,15 +208,6 @@ def main():
     print "------------------"
     clf.ori_score(valX, valy)
     print "------------------"
-    #for c in [0.001, 0.1, 1.0, 100]:
-    #    for g in [0.001, 0.1, 1.0, 100]:
-    #        clf = Blender()
-    #        clf.train(X, y, c, g)
-    #        print '%f %f' % (c, g)
-    #        print 'auc in: ', clf.auc_score(X, y)
-    #        print 'auc val:', clf.auc_score(valX, valy)
-    #        print "------------------"
-    #exit()
     clf.train(X, y, C)
     #clf.predict(X, y)
     print 'auc in: ', clf.predict(X, y)
@@ -259,21 +216,18 @@ def main():
     #print 'auc in: ', clf.auc_score(X, y)
     #print 'auc val:', clf.auc_score(valX, valy)
 
-    dump_svmlight_file(testX, np.zeros((len(testX))), 'test.svmlight', zero_based=False)
-    result = subprocess.check_output(
-        '../current/svm_perf/svm_perf_classify test.svmlight ./blending.model ./blending_prediction',
-        shell=True
-    )
-    outputans([], '/tmp2/b01902066/KDD/data/enrollment_test.csv', '')
+    if len(sys.argv) == 1:
+        dump_svmlight_file(testX, np.zeros((len(testX))), 'test.svmlight', zero_based=False)
+        result = subprocess.check_output(
+            SVM_PERF_PATH+'svm_perf_classify test.svmlight ./blending.model ./blending_prediction',
+            shell=True
+        )
+        outputans([], '/tmp2/b01902066/KDD/data/enrollment_test.csv', '')
 
     #print result
     #outputans(clf.predict(testX)[:, 1],
     #        '/tmp2/b01902066/KDD/data/enrollment_test.csv',
     #        '610_gbm_gbmrank_rf_ada_polylog_blend_logist_ans.csv')
-
-    #print '3 uniform auc val:', roc_auc_score(valy, np.mean(valX[:, :3], axis=1))
-
-
 
 if __name__ == "__main__":
     main()
