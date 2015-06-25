@@ -16,6 +16,7 @@ PRED_PATH = '/tmp2/b01902066/KDD/kdd15/blending/allpreds/625/'
 
 def perf_SVM_CV(X, y, C, cv):
     ret = []
+    C = C*len(X)/100.
     train_file = 'blend' + str(C) + '.svmlight'
     model_file = 'blending' + str(C) + '.model'
     preds_file = 'blending_preds' + str(C) + '.pred'
@@ -52,11 +53,11 @@ def perf_SVM_CV(X, y, C, cv):
 
     return np.mean(ret)
 
-def perf_SVM_train_eval(X, y, valX, valy, C):
-    train_file = 'blend' + str(C) + '.svmlight'
-    model_file = 'blending' + str(C) + '.model'
-    preds_file = 'blending_preds' + str(C) + '.pred'
-    dump_svmlight_file(X, y, train_file, zero_based=False)
+def perf_SVM_train_eval(X, y, valX, valy, C, ap=''):
+    C = C*len(X)/100.
+    train_file = 'blend.svmlight'
+    model_file = 'blending' + str(C) + '_' + ap + '.model'
+    preds_file = 'blending_preds' + str(C) + '_' + ap +'.pred'
     result = subprocess.check_output(
             SVM_PERF_PATH + 'svm_perf_learn ' +\
             '-c ' + str(C) + ' -l 10 -w 3 ' +\
@@ -65,8 +66,7 @@ def perf_SVM_train_eval(X, y, valX, valy, C):
             shell=True
         )
 
-    val_file = 'val' + str(C) + '.svmlight'
-    dump_svmlight_file(valX, valy, val_file, zero_based=False)
+    val_file = 'val.svmlight'
     result = subprocess.check_output(
             SVM_PERF_PATH + 'svm_perf_classify ' +\
             val_file + ' ' + model_file + ' ' + preds_file,
@@ -86,7 +86,11 @@ class Blender():
         pass
 
     def grid_search(self, X, y, valX, valy):
-        candidate_c = [10**i for i in range(0, 4)]
+        train_file = 'blend.svmlight'
+        val_file = 'val.svmlight'
+        dump_svmlight_file(X, y, train_file, zero_based=False)
+        dump_svmlight_file(valX, valy, val_file, zero_based=False)
+        candidate_c = [10**i for i in range(-2, 2)]
         res = Parallel(n_jobs=len(candidate_c), backend="threading")(
                     delayed(perf_SVM_train_eval)(X, y, valX, valy, c) \
                         for c in candidate_c)
@@ -96,7 +100,16 @@ class Blender():
         print "grid search result: ", res
         return max(res), candidate_c[res.index(max(res))]
 
+    def feature_select(self, X, y, valX, valy, C):
+        C = C*100./len(X)
+        candidate_i = [i for i in range(X.shape[1])]
+        res = Parallel(n_jobs=-1, backend="threading")(
+                delayed(perf_SVM_train_eval)(np.delete(X, [i], 1), y, np.delete(valX, [i], 1), valy, C, str(i)) for i in candidate_i)
+        print "feature select result: ", res
+        return max(res), candidate_i[res.index(max(res))]
+
     def train(self, X, y, C=1.0, gamma=1.0):
+        C = C*100./len(X)
         dump_svmlight_file(X, y, 'blend.svmlight', zero_based=False)
         result = subprocess.check_output(
                 SVM_PERF_PATH + 'svm_perf_learn -c ' + str(C) + ' -l 10 -w 3 blend.svmlight blending.model',
@@ -240,9 +253,11 @@ def main():
     #with open('/tmp2/b01902066/KDD/kdd15/blending/removed', 'r') as f:
     #    removed = [filename.strip() for filename in f.readlines()]
     for filename in sorted(os.listdir(PRED_PATH)):
-        if '_blend.csv' in filename and\
-            filename not in removed and\
-            'ada_blend' not in filename:
+        if '_blend.csv' in filename and filename not in removed\
+            and 'ada_blend' not in filename\
+            and 'logis' not in filename\
+            and 'team1_[Vauc-0.901429-Avg2Cv0][Blend-BigF][119_106_13-0130][Nor-0][ADA][1500-0.01-4]_blend.csv' not in filename\
+            and 'team3_110_GBM_md6_ne2800_lr0.01_blend.csv' not in filename:
             filelist.append(filename)
 
     eid, y, valeid, valy = read_truth()
@@ -264,16 +279,27 @@ def main():
     #print 'auc in: ', clf.predict(X, y)
     #print 'auc val:', clf.predict(valX, valy)
 
-    #dump_svmlight_file(testX, np.zeros((len(testX))), 'test.svmlight', zero_based=False)
-    #result = subprocess.check_output(
-    #    SVM_PERF_PATH+'svm_perf_classify test.svmlight ./blending.model ./blending_prediction',
-    #    shell=True
-    #)
-    #outputans([], '/tmp2/b01902066/KDD/data/enrollment_test.csv', '')
+    dump_svmlight_file(testX, np.zeros((len(testX))), 'test.svmlight', zero_based=False)
+    result = subprocess.check_output(
+        SVM_PERF_PATH+'svm_perf_classify test.svmlight ./blending.model ./blending_prediction',
+        shell=True
+    )
+    outputans([], '/tmp2/b01902066/KDD/data/enrollment_test.csv', '')
     #exit()
 
-    if len(sys.argv) == 1:
+    #best = -np.inf
+    #score = -1
+    #while score > best:
+    #    best = score
+    #    score, i = clf.feature_select(X, y, valX, valy, C)
+    #    print 'delete i:', filelist[i], 'auc val:', score
+    #    if score > best:
+    #        X = np.delete(X,[i], 1)
+    #        valX = np.delete(valX, [i], 1)
+    #        testX = np.delete(testX, [i], 1)
+    #        del filelist[i]
 
+    if len(sys.argv) == 1:
         os.chdir('./exp')
         for i in range(1):
             result = subprocess.check_output(
@@ -285,8 +311,6 @@ def main():
                     shell=True
                 )
             res = parse_exp_result(result)
-            #print res
-
             with open('../blending.model', 'r') as f:
                 w = f.readlines()[-1].split()[1:-1]
             ind = np.argsort(res)[::-1]
