@@ -12,25 +12,25 @@ from sklearn.svm import LinearSVC, SVC
 from sklearn.grid_search import GridSearchCV
 from joblib import Parallel, delayed
 
-SVM_RANK_PATH = './ranksvm/'
-PRED_PATH = './allpreds/620/'
-
+SVM_RANK_PATH = './liblinear-ranksvm-1.95/'
+PRED_PATH = './allpreds/626/'
+TMP_PATH = '/tmp/kddtmp/'
 def rank_SVM_train_eval(X, y, valX, valy, C):
-    train_file = 'blend' + str(C) + '.svmlight'
-    model_file = 'blending' + str(C) + '.model'
-    preds_file = 'blending_preds' + str(C) + '.pred'
+    train_file = TMP_PATH+'blend' + str(C) + '.svmlight'
+    model_file = TMP_PATH+'blending' + str(C) + '.model'
+    preds_file = TMP_PATH+'blending_preds' + str(C) + '.pred'
     dump_svmlight_file(X, y, train_file, zero_based=False)
     result = subprocess.check_output(
-            SVM_RANK_PATH + 'svm_rank_learn ' +\
+            SVM_RANK_PATH + 'train ' +\
             '-c ' + str(C) + ' -s 8 ' +\
             train_file + ' ' + model_file,
             #'../current/svm_perf/svm_perf_learn -t 2 -g 0.01 -c 0.01 -l 10 -w 3 blend.svmlight blending.model',
             shell=True
         )
-    val_file = 'val' + str(C) + '.svmlight'
+    val_file = TMP_PATH+'val' + str(C) + '.svmlight'
     dump_svmlight_file(valX, valy, val_file, zero_based=False)
     result = subprocess.check_output(
-            SVM_RANK_PATH + 'svm_rank_classify ' +\
+            SVM_RANK_PATH + 'predict ' +\
             val_file + ' ' + model_file + ' ' + preds_file,
             shell=True
         )
@@ -41,21 +41,20 @@ def rank_SVM_train_eval(X, y, valX, valy, C):
     #return float(re.findall('ROCArea[\s:0-9\.]+', result)[0][11:])/100.0
 
 def rank_SVM_feature_select_eval(X, y, valX, valy, C, i):
-    train_file = 'blend' + str(i) + '.svmlight'
-    model_file = 'blending' + str(i) + '.model'
-    preds_file = 'blending_preds' + str(i) + '.pred'
-    dump_svmlight_file(X, y, train_file, zero_based=False)
+    train_file = TMP_PATH+'blend.svmlight'
+    val_file = TMP_PATH+'val.svmlight'
+    model_file = TMP_PATH+'blending' + str(i) + '.model'
+    preds_file = TMP_PATH+'blending_preds' + str(i) + '.pred'
     result = subprocess.check_output(
-            SVM_RANK_PATH + 'svm_rank_learn ' +\
-            '-c ' + str(C) + ' -s 8 ' +\
+            SVM_RANK_PATH + 'train ' +\
+            '-c ' + str(C) + ' -s 8 ' + '-r ' +str(i+1)+' '+\
             train_file + ' ' + model_file,
             #'../current/svm_perf/svm_perf_learn -t 2 -g 0.01 -c 0.01 -l 10 -w 3 blend.svmlight blending.model',
             shell=True
         )
-    val_file = 'val' + str(i) + '.svmlight'
-    dump_svmlight_file(valX, valy, val_file, zero_based=False)
     result = subprocess.check_output(
-            SVM_RANK_PATH + 'svm_rank_classify ' +\
+            SVM_RANK_PATH + 'predict ' +\
+            '-r ' +str(i+1)+' '+\
             val_file + ' ' + model_file + ' ' + preds_file,
             shell=True
         )
@@ -77,9 +76,16 @@ class Blender():
         print "grid search result: ", res
         return max(res), candidate_c[res.index(max(res))]
     def feature_select(self, X, y, valX, valy, C):
+        train_file = TMP_PATH+'blend.svmlight'
+        dump_svmlight_file(X, y, train_file, zero_based=False)
+        val_file = TMP_PATH+'val.svmlight'
+        dump_svmlight_file(valX, valy, val_file, zero_based=False)
         candidate_i = [i for i in range(X.shape[1])]
+        
+        #for i in candidate_i:
+        #    rank_SVM_feature_select_eval(X, y, valX, valy, C, i)
         res = Parallel(n_jobs=-1, backend="threading")(
-                    delayed(rank_SVM_feature_select_eval)(np.delete(X, [i], 1), y, np.delete(valX, [i], 1), valy, C, i) \
+                    delayed(rank_SVM_feature_select_eval)(X, y, valX, valy, C, i) \
                         for i in candidate_i)
         print "feature select result: ", res
         return max(res), candidate_i[res.index(max(res))]
@@ -87,7 +93,7 @@ class Blender():
     def train(self, X, y, C=1.0, gamma=1.0):
         dump_svmlight_file(X, y, 'blend.svmlight', zero_based=False)
         result = subprocess.check_output(
-                SVM_RANK_PATH + 'svm_rank_learn -c ' + str(C) + ' -s 8 blend.svmlight blending.model',
+                SVM_RANK_PATH + 'train -c ' + str(C) + ' -s 8 blend.svmlight blending.model',
                 shell=True
             )
 
@@ -100,7 +106,7 @@ class Blender():
         if y != []:
             dump_svmlight_file(X, y, 'val.svmlight', zero_based=False)
             result = subprocess.check_output(
-                    SVM_RANK_PATH + 'svm_rank_classify val.svmlight ./blending.model ./val_prediction',
+                    SVM_RANK_PATH + 'predict val.svmlight ./blending.model ./val_prediction',
                     shell=True
                 )
             return re.findall('ROCArea[\s:0-9\.]+', result)[0][11:].strip()
@@ -114,6 +120,7 @@ class Blender():
         return roc_auc_score(y, self.clf.predict_proba(X)[:, 1])
 
 def read_preds(path, filelist=[], verbose=True):
+    F = []
     preds = []
     valpreds = []
     testpreds = []
@@ -138,6 +145,7 @@ def read_preds(path, filelist=[], verbose=True):
             print filename
         assert np.shape(pred) == (20000,)
 
+        F.append(filename[:-10])
         val_filename = filename[:-9] + 'val.csv'
         pred = []
         with open(path+val_filename, 'rb') as csvfile:
@@ -158,9 +166,10 @@ def read_preds(path, filelist=[], verbose=True):
         assert np.shape(pred) == (80362,)
         testpreds.append(pred)
 
-    return np.array(preds).T, np.array(valpreds).T, np.array(testpreds).T
+    return F, np.array(preds).T, np.array(valpreds).T, np.array(testpreds).T
 
 def calibrate(x):
+    #return (x-np.mean(x))/(np.max(x) - np.min(x))
     x = np.array(x)
     order = x.argsort()
     ranks = order.argsort()
@@ -211,10 +220,10 @@ def outputans(ans, id_file_path, path):
 
 def main():
     eid, y, valeid, valy = read_truth()
-    X, valX, testX = read_preds(PRED_PATH)
+    F, X, valX, testX = read_preds(PRED_PATH)
 
     #print X, testX
-    print np.shape(X), np.shape(valX), np.shape(testX)
+    #print np.shape(X), np.shape(valX), np.shape(testX)
 
     #scaler = MinMaxScaler()
     #_ = scaler.fit_transform(np.vstack((X, valX, testX)))
@@ -239,22 +248,22 @@ def main():
     print 'C:', C
     print 'auc val:', score
     """
+    
     C = 0.0001
     best = -np.inf
     score = -1
-    #X = np.delete(X,[1,2,3,4,5,7,9,18], 1)
-    #valX = np.delete(valX, [1,2,3,4,5,7,9,18], 1)
-    #testX = np.delete(testX, [1,2,3,4,5,7,9,18], 1)
+    ite = 0
     while score > best:
+        print X.shape, valX.shape, testX.shape
         best = score
         score, i = clf.feature_select(X, y, valX, valy, C)
-        print 'delete i:', i
-        print 'auc val:', score
+        print 'DELETE MODEL :', F[i]
+        del F[i]
+        print 'AUC val:', score
         if score > best:
             X = np.delete(X,[i], 1)
             valX = np.delete(valX, [i], 1)
             testX = np.delete(testX, [i], 1)
-
 
     #print "-----AUC in sample-----------"
     #clf.ori_score(X, y)
@@ -271,7 +280,7 @@ def main():
     if len(sys.argv) == 1:
         dump_svmlight_file(testX, np.zeros((len(testX))), 'test.svmlight', zero_based=False)
         result = subprocess.check_output(
-            SVM_RANK_PATH+'svm_rank_classify test.svmlight ./blending.model ./blending_prediction',
+            SVM_RANK_PATH+'predict test.svmlight ./blending.model ./blending_prediction',
             shell=True
         )
         outputans([], './enrollment_test.csv', '')

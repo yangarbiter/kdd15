@@ -1,0 +1,7 @@
+solver_type L2R_L2LOSS_RANKSVM
+nr_class 2
+nr_feature 2
+bias -1
+w
+0.0001799941681889507 
+0.0001799941681889507 
