@@ -14,8 +14,7 @@ def evaluate(X_train, y_train, X_test, y_test, n_round):
              'gamma': 0,
              'objective':'binary:logistic',
              'eval_metric': 'auc',
-             'silent': 1,
-             'nthread':10}
+             'silent': 1}
     plst = param.items()
     evallist = [(dval, 'eval'), (dtrain, 'train')]
     num_round = n_round
