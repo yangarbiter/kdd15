@@ -12,22 +12,24 @@ from sklearn.preprocessing import PolynomialFeatures, MinMaxScaler
 from joblib import Parallel, delayed
 from multiprocessing import Process
 
-def loadans():
+def loadans(filename):
     trainy = []
-    with open('/tmp2/kdd/truth_train.csv', 'r') as csvfile:
+    with open(filename, 'r') as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
         for row in reader:
             enrole_id = int(row[0])
             trainy.append(int(row[1]))
     return trainy
 
-def outputans(ans, id_file_path, path):
+def outputans(ans, id_file_paths, path):
     idxs = []
-    with open(id_file_path, 'r') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            if row[0] == 'enrollment_id': continue
-            idxs.append(int(row[0]))
+    for id_file_path in id_file_paths:
+        with open(id_file_path, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                if row[0] == 'enrollment_id': continue
+                idxs.append(int(row[0]))
+    assert len(idxs) == len(ans)
 
     with open(path, 'w') as f:
         for i, enrole_id in enumerate(idxs):
@@ -105,57 +107,66 @@ models = [
             'preproc': identity
         }
         ]
-        
+
 
 def main():
-    DATAPATH_BASE = './data/0617/'
-    BASE_PATH = '/tmp2/b01902066/KDD/kdd15/blending/allpreds/617/'
+    DATAPATH_BASE = '/tmp2/b01902066/KDD/kdd15/current/data/0623/'
+    BASE_PATH = '/tmp2/b01902066/KDD/kdd15/blending/allpreds/mypreds/'
 
-    with open(DATAPATH_BASE + 'train_feature.npy', 'r') as f:
-        trainX = np.load(f)
-    with open(DATAPATH_BASE + 'blend_feature.npy', 'r') as f:
+    with open(DATAPATH_BASE + 'blend_train_feature.npy', 'r') as f:
         blendX = np.load(f)
-    with open(DATAPATH_BASE + 'val_feature.npy', 'r') as f:
+    with open(DATAPATH_BASE + 'val_train_feature.npy', 'r') as f:
         valX = np.load(f)
-    with open(DATAPATH_BASE + 'test_feature.npy', 'r') as f:
+    with open(DATAPATH_BASE + 'real_train_feature.npy', 'r') as f:
         testX = np.load(f)
-    with open('./data/0610/label_train+blend+valid.npy') as f:
-        y = np.load(f)
-    trainy = loadans()
+
+    with open(DATAPATH_BASE + 'blend_test_feature.npy', 'r') as f:
+        pred_blendX = np.load(f)
+    with open(DATAPATH_BASE + 'val_test_feature.npy', 'r') as f:
+        pred_valX = np.load(f)
+    with open(DATAPATH_BASE + 'real_test_feature.npy', 'r') as f:
+        pred_testX = np.load(f)
+
+    #with open('/tmp2/b01902066/KDD/kdd15/current/data/0610/label_train+blend+valid.npy') as f:
+    #    y = np.load(f)
+    trainy = loadans('/tmp2/kdd/truth_train.csv')
+    blendy = loadans('/tmp2/b01902066/KDD/data/internal1/truth_train.csv')
+    valy = loadans('/tmp2/b01902066/KDD/data/truth_train.csv')
 
     processes = []
 
     for model in models:
-        tX, pX = model['preproc'](trainX, blendX)
+        tX, pX = model['preproc'](blendX, pred_blendX)
         proc = Process( target=train_pred,
                 args=(
-                    model['mod'], tX, y, pX,
-                    '/tmp2/kdd/enrollment_blend.csv',
+                    model['mod'], tX, trainy, pX,
+                    ['/tmp2/kdd/enrollment_blend.csv'],
                     BASE_PATH + model['mod_name'] + '_blend.csv',
                 ))
         processes.append(proc)
         processes[-1].start()
 
-        tX, pX = model['preproc'](np.vstack((trainX, blendX)), valX)
+        tX, pX = model['preproc'](valX, pred_valX)
         proc = Process( target=train_pred,
                 args=(
-                    model['mod'], tX, y, pX,
-                    '/tmp2/b01902066/KDD/data/internal1/enrollment_test.csv',
+                    model['mod'], tX, blendy, pX,
+                    ['/tmp2/kdd/enrollment_val.csv'],
+                    #'/tmp2/b01902066/KDD/data/internal1/enrollment_test.csv',
                     BASE_PATH + model['mod_name'] + '_val.csv',
                 ))
         processes.append(proc)
         processes[-1].start()
 
-        tX, pX = model['preproc'](np.vstack((trainX, blendX, valX)), testX)
+        tX, pX = model['preproc'](testX, pred_testX)
         proc = Process( target=train_pred,
                 args=(
-                    model['mod'], tX, y, pX,
-                    '/tmp2/b01902066/KDD/data/enrollment_test.csv',
+                    model['mod'], tX, valy, pX,
+                    ['/tmp2/b01902066/KDD/data/enrollment_test.csv'],
                     BASE_PATH + model['mod_name'] + '_test.csv',
                 ))
         processes.append(proc)
         processes[-1].start()
-        
+
     for i in processes:
         i.join()
 
