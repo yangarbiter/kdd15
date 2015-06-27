@@ -10,29 +10,30 @@ from sklearn.metrics import roc_auc_score
 
 class nnBlender():
     def __init__(self, num_features):
-        self.batch_size = 16
+        self.batch_size = 200
 
         self.model = Sequential()
-        self.model.add(Dense(20, 64, init='uniform'))
-        self.model.add(Activation('tanh'))
-        self.model.add(Dropout(0.5))
-        self.model.add(Dense(64, 64, init='uniform'))
-        self.model.add(Activation('tanh'))
-        self.model.add(Dropout(0.5))
-        self.model.add(Dense(64, 2, init='uniform'))
+        self.model.add(Dense(num_features, 64, init='glorot_normal'))
+        self.model.add(Activation('relu'))
+        self.model.add(Dense(64, 2, init='glorot_normal'))
         self.model.add(Activation('softmax'))
 
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
-        self.model.compile(loss='binary_crossentropy', optimizer=sgd)
+        sgd = SGD(lr=0.0005, decay=1e-5, momentum=0.9, nesterov=True)
+        #self.model.compile(loss='binary_crossentropy', optimizer=sgd)
+        self.model.compile(loss='categorical_crossentropy', optimizer=sgd)
 
     def train(self, X, y, valX, valy):
         enc = OneHotEncoder()
         y = enc.fit_transform(np.reshape(y, (-1, 1)))
         valy = enc.fit_transform(np.reshape(valy, (-1, 1)))
+        y = y.toarray()
+        valy = valy.toarray()
+        print np.shape(y)
+        print type(y)
         print np.shape(valy)
         self.model.fit(
                 X, y,
-                nb_epoch=20,
+                nb_epoch=300,
                 batch_size=self.batch_size,
                 show_accuracy=True,
                 validation_data=(valX, valy))
@@ -60,6 +61,11 @@ def main():
     clf = nnBlender(len(X[0]))
     print clf.train(X, y, valX, valy)
     print clf.predict(testX)
+    print roc_auc_score(valy, clf.predict(valX)[:, 1])
+    print np.shape(clf.model.layers[0].get_weights()),
+    print np.shape(clf.model.layers[0].get_weights()[0]),
+    print np.shape(clf.model.layers[0].get_weights()[1])
+    print clf.model.layers[0].get_weights()
 
 
 if __name__ == '__main__':
