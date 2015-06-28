@@ -3,7 +3,7 @@ from generate_feature import *
 from model import *
 import cPickle, csv
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
 from sklearn.datasets import dump_svmlight_file
 from sklearn.metrics import roc_auc_score
 from sklearn.calibration import CalibratedClassifierCV
@@ -30,68 +30,75 @@ def outputans(ans, id_file_path, path):
         for i, enrole_id in enumerate(idxs):
             f.write(str(enrole_id) + ',' + str(ans[i]) + '\n')
 
-with open('../../data/feature/train_feature.npy', 'r') as f:
+with open('./data/0610/train_feature.npy', 'r') as f:
     trainX = np.load(f)
 
-with open('../../data/feature/blend_feature.npy', 'r') as f:
+with open('./data/0610/blend_feature.npy', 'r') as f:
     blendX = np.load(f)
 
-with open('../../data/feature/test_feature.npy', 'r') as f:
+with open('./data/0610/val_feature.npy', 'r') as f:
+    valX = np.load(f)
+
+with open('./data/0610/test_feature.npy', 'r') as f:
     testX = np.load(f)
 
-print np.shape(trainX)
-print np.shape(blendX)
-
-#with open('fet.pkl', 'r') as f:
-#    train_X, test_X = cPickle.load(f)
+with open('./data/0610/label_train+blend+valid.npy') as f:
+    y = np.load(f)
 
 trainy = loadans()
 
-#with open('./current/fet.pkl', 'r') as f:
-#    train_X, test_X = cPickle.load(f)
-#with open('fet.pkl', 'r') as f:
-#    train_X, test_X = cPickle.load(f)
 
-train_y = loadans()
-
-clf = CalibratedClassifierCV(
-    base_estimator=RandomForestClassifier(
-            criterion='entropy',
-            n_estimators = 3000,
-            class_weight = "auto",
-            max_depth = 12,
+def train_pred(trainX, y, predX, eidfile, dest):
+#clf = CalibratedClassifierCV(
+#    base_estimator=RandomForestClassifier(
+#            criterion='entropy',
+#            n_estimators = 3000,
+#            #class_weight = "auto",
+#            min_samples_split = 30,
+#            max_depth = 15,
+#            n_jobs=-1
+#        )
+#    )
+    clf = RandomForestClassifier(
+            criterion='gini',
+            n_estimators = 1000,
+            #class_weight = "auto",
+            min_samples_split = 30,
+            max_depth = 15,
             n_jobs=-1
         )
-    )
+    #clf = ExtraTreesClassifier(
+    #        criterion='entropy',
+    #        n_estimators=1000,
+    #        max_depth = 15,
+    #        n_jobs=-1
+    #    )
+    clf.fit(trainX, y[:len(trainX)])
+    print roc_auc_score(y[len(trainX):len(trainX)+len(predX)], clf.predict_proba(predX)[:, 1])
+    outputans(clf.predict_proba(predX)[:, 1], eidfile, dest)
 
-clf.fit(trainX, trainy)
-outputans(clf.predict_proba(blendX)[:, 1],
+
+train_pred(
+    trainX,
+    y,
+    blendX,
     '/tmp2/kdd/enrollment_blend.csv',
-    '/tmp2/b01902066/KDD/kdd15/blending/preds/rf_66_blend.csv')
-outputans(clf.predict_proba(testX)[:, 1],
-    '/tmp2/b01902066/KDD/data/internal1/enrollment_test.csv',
-    '/tmp2/b01902066/KDD/kdd15/blending/testpreds/rf_66_test.csv')
+    '/tmp2/b01902066/KDD/kdd15/blending/preds/610_nocali/rf_blend.csv'
+)
+exit(0
 
-#clf.fit(train_X, train_y)
-#
-#print "done building trees"
-#
-#ret = []
-#for est in clf.estimators_:
-#    if ret == []:
-#        ret = np.reshape(est.predict(train_X), (-1, 1))
-#    else:
-#        ret = np.hstack((ret, np.reshape(est.predict(train_X), (-1, 1))))
-#
-#valret = []
-#for est in clf.estimators_:
-#    if valret == []:
-#        valret = np.reshape(est.predict(test_X), (-1, 1))
-#    else:
-#        valret = np.hstack((valret, np.reshape(est.predict(test_X), (-1, 1))))
-#
-##print clf.score(test_X, test_y)
-##print roc_auc_score(test_y, clf.predict_proba(test_X)[:, 1])
-#
-#dump_svmlight_file(ret, train_y, 'upRFtrain.svmlight', zero_based=False)
-#dump_svmlight_file(valret, np.zeros(len(valret)), 'upRFtest.svmlight', zero_based=False)
+train_pred(
+    np.vstack((trainX, blendX)),
+    y,
+    valX,
+    '/tmp2/b01902066/KDD/data/internal1/enrollment_test.csv',
+    '/tmp2/b01902066/KDD/kdd15/blending/valpreds/610_nocali/rf_val.csv'
+)
+
+train_pred(
+    np.vstack((trainX, blendX, valX)),
+    y,
+    testX,
+    '/tmp2/b01902066/KDD/data/enrollment_test.csv',
+    '/tmp2/b01902066/KDD/kdd15/blending/testpreds/610_nocali/rf_test.csv'
+)

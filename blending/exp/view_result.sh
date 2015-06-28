@@ -1,7 +1,7 @@
 #!/bin/bash
-for i in `seq 0 $1`;
+for (( i=0; i<$1; i++ ))
 do
-    grep 'deleted' ./$i/output
+    #grep 'exclude' ./$i/output
     #tail -n 1 ./$i/blending.model
     grep 'auc val' ./$i/output
 done

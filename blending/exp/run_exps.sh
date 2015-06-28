@@ -1,21 +1,22 @@
 #!/bin/bash
 
-for (( i=0; i<$1; i+=4 ))
+export OMP_NUM_THREADS=1
+for (( i=0; i<$1; i+=10 ))
 do
-    for (( j=$i; j<$i+4; j++ ))
+    for (( j=$i; j<$i+10; j++ ))
     do
         if (($j < $1))
         then
             echo $j
             mkdir -p $j
             cd $j
-            python ../../blender.py $j > output &
+            python $2 $j > output &
             cd ..
         fi
     done
 
-    wait
-    wait
-    wait
-    wait
+    for (( j=0; j<10; j++ ))
+    do
+        wait
+    done
 done

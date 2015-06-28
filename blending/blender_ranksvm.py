@@ -20,15 +20,14 @@ def rank_SVM_train_eval(X, y, valX, valy, C):
     model_file = TMP_PATH+'blending' + str(C) + '.model'
     preds_file = TMP_PATH+'blending_preds' + str(C) + '.pred'
     dump_svmlight_file(X, y, train_file, zero_based=False)
-    result = subprocess.check_output(
-            SVM_RANK_PATH + 'train ' +\
-            '-c ' + str(C) + ' -s 8 ' +\
-            train_file + ' ' + model_file,
-            #'../current/svm_perf/svm_perf_learn -t 2 -g 0.01 -c 0.01 -l 10 -w 3 blend.svmlight blending.model',
-            shell=True
-        )
+
+def rank_SVM_train_eval(X, y, valX, valy, C):
+    train_file = 'blend.svmlight'
+    model_file = 'blending' + str(C) + '.model'
+    preds_file = 'blending_preds' + str(C) + '.pred'
     val_file = TMP_PATH+'val' + str(C) + '.svmlight'
     dump_svmlight_file(valX, valy, val_file, zero_based=False)
+    val_file = 'val.svmlight'
     result = subprocess.check_output(
             SVM_RANK_PATH + 'predict ' +\
             val_file + ' ' + model_file + ' ' + preds_file,
@@ -69,6 +68,8 @@ class Blender():
         pass
 
     def grid_search(self, X, y, valX, valy):
+        dump_svmlight_file(X, y, train_file, zero_based=False)
+        dump_svmlight_file(valX, valy, val_file, zero_based=False)
         candidate_c = [10**i for i in range(-10, 10)]
         res = Parallel(n_jobs=-1, backend="threading")(
                     delayed(rank_SVM_train_eval)(X, y, valX, valy, c) \
@@ -176,12 +177,10 @@ def calibrate(x):
     return ranks / np.float(len(ranks))
 
 def read_truth():
-    #with open('/tmp2/b01902066/KDD/kdd15/current/data/0610/label_train+blend+valid.npy', 'rb') as f:
-    #    y = np.load(f)
-    #return y
     eid = []
     y = []
-    with open('./truth_blend.csv', 'rb') as csvfile:
+    #with open('/tmp2/kdd/truth_blend.csv', 'rb') as csvfile:
+    with open('./data/truth_blend.csv', 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
         for row in reader:
             eid.append(int(row[0]))
@@ -189,7 +188,8 @@ def read_truth():
 
     testeid = []
     testy = []
-    with open('./truth_test.csv', 'rb') as csvfile:
+    #with open('/tmp2/b01902066/KDD/data/internal1/truth_test.csv', 'rb') as csvfile:
+    with open('./data/internal1/truth_test.csv', 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=",")
         for row in reader:
             testeid.append(int(row[0]))

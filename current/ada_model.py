@@ -32,37 +32,78 @@ def outputans(ans, id_file_path, path):
         for i, enrole_id in enumerate(idxs):
             f.write(str(enrole_id) + ',' + str(ans[i]) + '\n')
 
-with open('../../data/feature/train_feature.npy', 'r') as f:
+with open('./data/0610/train_feature.npy', 'r') as f:
     trainX = np.load(f)
 
-with open('../../data/feature/blend_feature.npy', 'r') as f:
+with open('./data/0610/blend_feature.npy', 'r') as f:
     blendX = np.load(f)
 
-with open('../../data/feature/test_feature.npy', 'r') as f:
+with open('./data/0610/val_feature.npy', 'r') as f:
+    valX = np.load(f)
+
+with open('./data/0610/test_feature.npy', 'r') as f:
     testX = np.load(f)
 
-with open('fet.pkl', 'r') as f:
-    train_X, test_X = cPickle.load(f)
+#with open('fet.pkl', 'r') as f:
+#    train_X, test_X = cPickle.load(f)
 
-trainy = loadans()
+with open('./data/0610/label_train+blend+valid.npy') as f:
+    y = np.load(f)
 
-clf = CalibratedClassifierCV(
-        base_estimator=AdaBoostClassifier(
-            base_estimator = DecisionTreeClassifier(
-                    criterion='entropy',
-                    max_depth=3,
-                ),
-            learning_rate = 0.05,
-            n_estimators = 600,
+#trainy = loadans()
+
+#clf = CalibratedClassifierCV(
+#        base_estimator=AdaBoostClassifier(
+#            base_estimator = DecisionTreeClassifier(
+#                    criterion='entropy',
+#                    max_depth=3,
+#                ),
+#            learning_rate = 0.05,
+#            n_estimators = 600,
+#        ),
+#        method='sigmoid', 
+#        cv=5
+#    )
+clf=AdaBoostClassifier(
+    base_estimator = DecisionTreeClassifier(
+            criterion='entropy',
+            max_depth=3,
         ),
-        method='sigmoid', 
-        cv=5
-    )
-
+    learning_rate = 0.05,
+    n_estimators = 600,
+)
+trainy = y[:len(trainX)]
 clf.fit(trainX, trainy)
 outputans(clf.predict_proba(blendX)[:, 1],
     '/tmp2/kdd/enrollment_blend.csv',
-    '/tmp2/b01902066/KDD/kdd15/blending/preds/adaboost_66_blend.csv')
-outputans(clf.predict_proba(testX)[:, 1],
+    '/tmp2/b01902066/KDD/kdd15/blending/preds/610_nocali/adaboost_blend.csv')
+
+clf=AdaBoostClassifier(
+    base_estimator = DecisionTreeClassifier(
+            criterion='entropy',
+            max_depth=3,
+        ),
+    learning_rate = 0.05,
+    n_estimators = 600,
+)
+trainX = np.vstack((trainX, blendX))
+trainy = y[:len(trainX)]
+clf.fit(trainX, trainy)
+outputans(clf.predict_proba(valX)[:, 1],
     '/tmp2/b01902066/KDD/data/internal1/enrollment_test.csv',
-    '/tmp2/b01902066/KDD/kdd15/blending/testpreds/adaboost_66_test.csv')
+    '/tmp2/b01902066/KDD/kdd15/blending/valpreds/610_nocali/adaboost_val.csv')
+
+clf=AdaBoostClassifier(
+    base_estimator = DecisionTreeClassifier(
+            criterion='entropy',
+            max_depth=3,
+        ),
+    learning_rate = 0.05,
+    n_estimators = 600,
+)
+trainX = np.vstack((trainX, valX))
+trainy = y
+clf.fit(trainX, trainy)
+outputans(clf.predict_proba(testX)[:, 1],
+    '/tmp2/b01902066/KDD/data/enrollment_test.csv',
+    '/tmp2/b01902066/KDD/kdd15/blending/testpreds/610_nocali/adaboost_test.csv')
